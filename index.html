@@ -1,0 +1,165 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8"/>
+    <style>
+
+body {
+  font: 10px sans-serif;
+  shape-rendering: crispEdges;
+}
+
+          .day {
+            fill: #fff;
+            stroke: #ccc;
+          }
+
+          .month {
+            fill: none;
+            stroke: #000;
+            stroke-width: 2px;
+          }
+
+          .RdYlGn .q0-11{fill:rgb(165,0,38)}
+          .RdYlGn .q1-11{fill:rgb(215,48,39)}
+          .RdYlGn .q2-11{fill:rgb(244,109,67)}
+          .RdYlGn .q3-11{fill:rgb(253,174,97)}
+          .RdYlGn .q4-11{fill:rgb(254,224,139)}
+          .RdYlGn .q5-11{fill:rgb(255,255,191)}
+          .RdYlGn .q6-11{fill:rgb(217,239,139)}
+          .RdYlGn .q7-11{fill:rgb(166,217,106)}
+          .RdYlGn .q8-11{fill:rgb(102,189,99)}
+          .RdYlGn .q9-11{fill:rgb(26,152,80)}
+          .RdYlGn .q10-11{fill:rgb(0,104,55)}
+
+          #title {
+            text-align: center;
+          }
+
+          footer {
+            text-align: center;
+          }
+    </style>
+  </head>
+  <body>
+    <div id="title">
+      <h1>Executive Orders by Date</h1>
+    </div>
+    <div id="cal">
+    </div>
+    <footer>
+      <p>
+        Using data from <a href="https://www.federalregister.gov/executive-orders">Federal Register</a>
+      </p>
+    </footer>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script type="application/javascript">
+      var percent = d3.format(".1%");
+      var dateFormat = d3.utcFormat("%Y-%m-%d");
+      var dateParser = d3.utcParse("%Y-%m-%d");
+      var minDate = new Date();
+      var maxDate = new Date(0);
+      var maxDailyCount = 0;
+
+      window.processData = function (data) {
+        window.data = data;
+        dateMap = d3.map();
+
+        data.results.forEach(function (order) {
+          var date;
+          if (order.signing_date !== null) {
+            date = order.signing_date;
+          } else {
+            date = order.publication_date;
+          }
+
+          if (!date) {
+          console.log("error no date: " + order);
+          return;
+          }
+          if (dateParser(date) < minDate) {
+            console.log(date);
+            minDate = dateParser(date);
+          }
+          if (dateParser(date) > maxDate) {
+            maxDate = dateParser(date);
+          }
+
+          var t = dateMap.get(date);
+          t = t || [];
+          t.push(order);
+          dateMap.set(date, t);
+          //dateMap[date] = dateMap[date] || [];
+          //dateMap[date].push(order);
+        });
+
+        // calculate max daily count
+        for (var dateEntry in dateMap) {
+          var c = dateMap[dateEntry].length;
+          if (c > maxDailyCount) {
+            maxDailyCount = c;
+          }
+        }
+
+        var width = 960;
+        var height = 136;
+        cellSize = 17;
+
+        color = d3.scaleQuantize()
+              .domain([0, maxDailyCount])
+                  .range(d3.range(11).map(function(d) { return "q" + d + "-11"; }));
+
+svg = d3.select("#cal").selectAll("svg")
+      .data(d3.range(maxDate.getFullYear(), minDate.getFullYear(), -1))
+        .enter().append("svg")
+            .attr("width", width)
+                .attr("height", height)
+                    .attr("class", "RdYlGn")
+                      .append("g")
+                          .attr("transform", "translate(" + ((width - cellSize * 53) / 2) + "," + (height - cellSize * 7 - 1) + ")");
+
+svg.append("text")
+      .attr("transform", "translate(-6," + cellSize * 3.5 + ")rotate(-90)")
+          .style("text-anchor", "middle")
+              .text(function(d) { return d; });
+
+rect = svg.selectAll(".day")
+      .data(function(d) { return d3.timeDays(new Date(d, 0, 1), new Date(d + 1, 0, 1)); })
+        .enter().append("rect")
+            .attr("class", "day")
+                .attr("width", cellSize)
+                    .attr("height", cellSize)
+                        .attr("x", function(d) { return d3.timeWeek.count(d3.timeYear(d), d) * cellSize; })
+                            .attr("y", function(d) { return d.getDay() * cellSize; })
+                                .datum(dateFormat);
+
+rect.append("title")
+      .text(function(d) { return d; });
+
+svg.selectAll(".month")
+      .data(function(d) { return d3.timeMonths(new Date(d, 0, 1), new Date(d + 1, 0, 1)); })
+        .enter().append("path")
+            .attr("class", "month")
+                .attr("d", monthPath);
+
+      rect.filter(function(d) { return dateMap.has(d); })
+              .attr("style", function(d) { return "fill: " + d3.interpolateViridis((8 - dateMap.get(d).length) / maxDailyCount); })
+                  .select("title")
+                        .text(function(d) { return d + ": " + dateMap.get(d).length; });
+      };
+      
+function monthPath(t0) {
+  var t1 = new Date(t0.getFullYear(), t0.getMonth() + 1, 0),
+      d0 = t0.getDay(), w0 = d3.timeWeek.count(d3.timeYear(t0), t0),
+      d1 = t1.getDay(), w1 = d3.timeWeek.count(d3.timeYear(t1), t1);
+  return "M" + (w0 + 1) * cellSize + "," + d0 * cellSize
+      + "H" + w0 * cellSize + "V" + 7 * cellSize
+      + "H" + w1 * cellSize + "V" + (d1 + 1) * cellSize
+      + "H" + (w1 + 1) * cellSize + "V" + 0
+      + "H" + (w0 + 1) * cellSize + "Z";
+};
+    </script>
+    <script type="application/javascript" src="https://www.federalregister.gov/api/v1/documents.json?conditions%5Bcorrection%5D=0&conditions%5Bpresidential_document_type_id%5D=2&conditions%5Btype%5D=PRESDOCU&fields%5B%5D=citation&fields%5B%5D=document_number&fields%5B%5D=end_page&fields%5B%5D=executive_order_notes&fields%5B%5D=executive_order_number&fields%5B%5D=html_url&fields%5B%5D=pdf_url&fields%5B%5D=publication_date&fields%5B%5D=signing_date&fields%5B%5D=start_page&fields%5B%5D=title&fields%5B%5D=full_text_xml_url&fields%5B%5D=body_html_url&fields%5B%5D=json_url&order=executive_order_number&per_page=1000&callback=processData"></script>
+  </body>
+</html>
+
